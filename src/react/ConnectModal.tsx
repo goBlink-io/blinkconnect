@@ -350,14 +350,25 @@ export function ConnectModal({ chains, theme, accentColor, logo, className }: Co
 // Starknet sub-view (needs its own hook context)
 function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void }) {
   const wallets = useSuiWallets();
-  const { mutate: connectWallet } = useSuiConnectWallet();
+  const { mutate: connectWallet, isPending } = useSuiConnectWallet();
+  const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState<string | null>(null);
 
   const handleConnect = (wallet: any) => {
+    setError(null);
+    setConnecting(wallet.name);
+    console.log('[BlinkConnect] Connecting Sui wallet:', wallet.name, wallet);
     connectWallet(
       { wallet },
       {
         onSuccess: () => {
+          console.log('[BlinkConnect] Sui wallet connected:', wallet.name);
           setTimeout(onClose, 400);
+        },
+        onError: (err: any) => {
+          console.error('[BlinkConnect] Sui wallet connect error:', err);
+          setError(err?.message || 'Connection failed');
+          setConnecting(null);
         },
       }
     );
@@ -368,6 +379,11 @@ function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void 
       <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '8px' }}>
         Select a Sui wallet
       </p>
+      {error && (
+        <p style={{ fontSize: '13px', color: '#ef4444', padding: '8px 12px', backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: '8px' }}>
+          {error}
+        </p>
+      )}
       {wallets.length === 0 && (
         <p style={{ fontSize: '13px', color: colors.textMuted, textAlign: 'center', padding: '20px 0' }}>
           No Sui wallets detected. Install a Sui wallet extension.
@@ -377,6 +393,7 @@ function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void 
         <button
           key={wallet.name}
           onClick={() => handleConnect(wallet)}
+          disabled={isPending}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -384,14 +401,15 @@ function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void 
             padding: '12px 16px',
             borderRadius: '10px',
             border: `1px solid ${colors.border}`,
-            backgroundColor: colors.cardBg,
+            backgroundColor: connecting === wallet.name ? (colors.accent || '#3b82f6') + '22' : colors.cardBg,
             color: colors.text,
-            cursor: 'pointer',
+            cursor: isPending ? 'wait' : 'pointer',
             fontSize: '14px',
             fontWeight: 500,
             fontFamily: 'inherit',
             transition: 'background-color 0.15s',
             width: '100%',
+            opacity: isPending && connecting !== wallet.name ? 0.5 : 1,
           }}
         >
           {wallet.icon && (
@@ -401,7 +419,7 @@ function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void 
               style={{ width: '28px', height: '28px', borderRadius: '6px' }}
             />
           )}
-          <span>{wallet.name}</span>
+          <span>{connecting === wallet.name && isPending ? `Connecting ${wallet.name}...` : wallet.name}</span>
         </button>
       ))}
     </div>
