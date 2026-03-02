@@ -4,12 +4,11 @@ import type { ChainType } from '../core/types';
 import { formatAddress } from '../utils/address';
 import { getChainMeta } from '../utils/chains';
 
-// Sui connect button (optional — rendered when Sui is selected)
-let SuiConnectButton: React.ComponentType | null = null;
-try {
-  const dappKit = require('@mysten/dapp-kit');
-  SuiConnectButton = dappKit.ConnectButton;
-} catch {}
+// Sui wallet connection
+import {
+  useWallets as useSuiWallets,
+  useConnectWallet as useSuiConnectWallet,
+} from '@mysten/dapp-kit';
 
 // Starknet connectors for the modal
 let useStarknetConnectHook: (() => { connect: any; connectors: any[] }) | null = null;
@@ -250,20 +249,8 @@ export function ConnectModal({ chains, theme, accentColor, logo, className }: Co
     if (!selectedChain) return null;
     const chain = ALL_CHAINS.find((c) => c.id === selectedChain)!;
 
-    if (selectedChain === 'sui' && SuiConnectButton) {
-      return (
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '16px' }}>
-            Connect your Sui wallet
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <SuiConnectButton />
-          </div>
-          <p style={{ fontSize: '12px', color: colors.textMuted, marginTop: '12px' }}>
-            Supports Sui Wallet, Suiet, and more
-          </p>
-        </div>
-      );
+    if (selectedChain === 'sui') {
+      return <SuiConnectView colors={colors} onClose={ctx.closeModal} />;
     }
 
     if (selectedChain === 'starknet' && useStarknetConnectHook) {
@@ -361,6 +348,66 @@ export function ConnectModal({ chains, theme, accentColor, logo, className }: Co
 }
 
 // Starknet sub-view (needs its own hook context)
+function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void }) {
+  const wallets = useSuiWallets();
+  const { mutate: connectWallet } = useSuiConnectWallet();
+
+  const handleConnect = (wallet: any) => {
+    connectWallet(
+      { wallet },
+      {
+        onSuccess: () => {
+          setTimeout(onClose, 400);
+        },
+      }
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '8px' }}>
+        Select a Sui wallet
+      </p>
+      {wallets.length === 0 && (
+        <p style={{ fontSize: '13px', color: colors.textMuted, textAlign: 'center', padding: '20px 0' }}>
+          No Sui wallets detected. Install a Sui wallet extension.
+        </p>
+      )}
+      {wallets.map((wallet) => (
+        <button
+          key={wallet.name}
+          onClick={() => handleConnect(wallet)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '12px 16px',
+            borderRadius: '10px',
+            border: `1px solid ${colors.border}`,
+            backgroundColor: colors.cardBg,
+            color: colors.text,
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 500,
+            fontFamily: 'inherit',
+            transition: 'background-color 0.15s',
+            width: '100%',
+          }}
+        >
+          {wallet.icon && (
+            <img
+              src={wallet.icon}
+              alt={wallet.name}
+              style={{ width: '28px', height: '28px', borderRadius: '6px' }}
+            />
+          )}
+          <span>{wallet.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StarknetConnectView({ colors, onClose }: { colors: any; onClose: () => void }) {
   if (!useStarknetConnectHook) return null;
   const { connect, connectors } = useStarknetConnectHook();
