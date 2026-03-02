@@ -1,4 +1,6 @@
 import React, {
+  lazy,
+  Suspense,
   createContext,
   useContext,
   useState,
@@ -324,7 +326,25 @@ function UnifiedWalletLayer({ config, children }: { config: BlinkConnectConfig; 
     [connectedWallets, isModalOpen, adapters, config]
   );
 
-  return <BlinkWalletContext.Provider value={value}>{children}</BlinkWalletContext.Provider>;
+  return (
+    <BlinkWalletContext.Provider value={value}>
+      {children}
+      {isModalOpen && <ConnectModalPortal />}
+    </BlinkWalletContext.Provider>
+  );
+}
+
+// ── Connect Modal (lazy loaded) ──
+const LazyConnectModal = lazy(() =>
+  import('./ConnectModal').then((m) => ({ default: m.ConnectModal }))
+);
+
+function ConnectModalPortal() {
+  return (
+    <Suspense fallback={null}>
+      <LazyConnectModal />
+    </Suspense>
+  );
 }
 
 // ── Public Provider ──
