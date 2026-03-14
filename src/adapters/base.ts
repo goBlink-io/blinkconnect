@@ -1,4 +1,4 @@
-import type { ChainType, AdapterHookResult, ConnectOptions } from '../core/types';
+import type { ChainType, AdapterHookResult } from '../core/types';
 
 /**
  * Default no-op adapter returned when a chain's peer dependency is not installed.

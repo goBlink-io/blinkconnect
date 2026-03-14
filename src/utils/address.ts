@@ -39,7 +39,7 @@ export function validateAddress(chain: string, address: string): boolean {
     case 'ton':
       return address.length >= 32;
     case 'tron':
-      return /^T[a-zA-Z0-9]{33}$/.test(address);
+      return /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
     default:
       return address.length > 0;
   }

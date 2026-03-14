@@ -11,11 +11,7 @@ import {
 } from '@mysten/dapp-kit';
 
 // Starknet connectors for the modal
-let useStarknetConnectHook: (() => { connect: any; connectors: any[] }) | null = null;
-try {
-  const starknet = require('@starknet-react/core');
-  useStarknetConnectHook = starknet.useConnect;
-} catch {}
+import { useConnect as useStarknetConnect } from '@starknet-react/core';
 
 export interface ConnectModalProps {
   /** Limit which chains are shown */
@@ -78,16 +74,16 @@ export function ConnectModal({ chains, theme, accentColor, logo, className }: Co
   });
 
   // Auto-close on Sui connect
+  const suiConnected = ctx.isChainConnected('sui');
   useEffect(() => {
-    const nowConnected = ctx.isChainConnected('sui');
-    if (!previousSuiRef.current && nowConnected && selectedChain === 'sui') {
+    if (!previousSuiRef.current && suiConnected && selectedChain === 'sui') {
       setTimeout(() => {
         ctx.closeModal();
         setSelectedChain(null);
       }, 400);
     }
-    previousSuiRef.current = nowConnected;
-  }, [ctx.isChainConnected('sui'), selectedChain]);
+    previousSuiRef.current = suiConnected;
+  }, [suiConnected, selectedChain, ctx]);
 
   // Reset selection when modal closes
   useEffect(() => {
@@ -259,7 +255,7 @@ export function ConnectModal({ chains, theme, accentColor, logo, className }: Co
       return <SuiConnectView colors={colors} onClose={ctx.closeModal} />;
     }
 
-    if (selectedChain === 'starknet' && useStarknetConnectHook) {
+    if (selectedChain === 'starknet') {
       return <StarknetConnectView colors={colors} onClose={ctx.closeModal} />;
     }
 
@@ -433,8 +429,7 @@ function SuiConnectView({ colors, onClose }: { colors: any; onClose: () => void 
 }
 
 function StarknetConnectView({ colors, onClose }: { colors: any; onClose: () => void }) {
-  if (!useStarknetConnectHook) return null;
-  const { connect, connectors } = useStarknetConnectHook();
+  const { connect, connectors } = useStarknetConnect();
 
   const walletNames = ['Argent X', 'Braavos'];
   const walletEmojis = ['\uD83E\uDD8A', '\uD83D\uDEE1\uFE0F'];
