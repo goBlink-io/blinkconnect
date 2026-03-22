@@ -21,6 +21,7 @@ export function useTonAdapter(): AdapterHookResult {
     chain: 'ton',
     address: tonAddr || null,
     connected: !!tonAddr,
+    transport: tonAddr ? 'tonconnect' : null,
     connect,
     disconnect,
   };

@@ -8,6 +8,7 @@ export function createNoopAdapter(chain: ChainType): AdapterHookResult {
     chain,
     address: null,
     connected: false,
+    transport: null,
     connect: async () => {
       console.warn(
         `[BlinkConnect] ${chain} adapter dependencies not installed. Skipping connect.`

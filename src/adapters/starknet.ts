@@ -28,6 +28,7 @@ export function useStarknetAdapter(): AdapterHookResult {
     chain: 'starknet',
     address: isConnected ? address ?? null : null,
     connected: !!isConnected,
+    transport: isConnected ? 'injected' : null,
     connect,
     disconnect,
   };

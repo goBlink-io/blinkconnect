@@ -26,6 +26,7 @@ export function useSuiAdapter(): AdapterHookResult {
     chain: 'sui',
     address: suiAccount?.address ?? null,
     connected: !!suiAccount?.address,
+    transport: suiAccount?.address ? 'injected' : null,
     connect,
     disconnect,
   };

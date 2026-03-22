@@ -86,6 +86,7 @@ export function useNearAdapter(options?: NearAdapterOptions): AdapterHookResult 
     chain: 'near',
     address,
     connected: !!address,
+    transport: address ? 'injected' : null,
     connect,
     disconnect,
   };

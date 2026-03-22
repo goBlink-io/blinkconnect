@@ -22,6 +22,8 @@ export interface WalletState {
 export interface ConnectOptions {
   /** Specific wallet to connect (adapter-dependent) */
   wallet?: string;
+  /** Force a specific transport (default: auto-detect based on platform) */
+  transport?: 'injected' | 'walletconnect' | 'zklogin' | 'tonconnect';
   /** Chain-specific options */
   chainOptions?: Record<string, unknown>;
 }
@@ -46,6 +48,8 @@ export interface AdapterHookResult {
   chain: ChainType;
   address: string | null;
   connected: boolean;
+  /** Which transport is being used for this connection */
+  transport: 'injected' | 'walletconnect' | 'zklogin' | 'tonconnect' | null;
   connect: (options?: ConnectOptions) => Promise<void>;
   disconnect: () => Promise<void>;
 }
@@ -90,6 +94,10 @@ export interface BlinkConnectConfig {
     persistSession?: boolean;
     socialLogin?: boolean;
     analytics?: boolean;
+    /** Enable WalletConnect transport (default: true on mobile, false on desktop) */
+    walletConnect?: boolean;
+    /** Allow linking multiple wallets across chains (default: true) */
+    sessionLinking?: boolean;
   };
 
   /** Callbacks */

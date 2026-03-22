@@ -28,6 +28,7 @@ export function useAptosAdapter(): AdapterHookResult {
     chain: 'aptos',
     address: connected ? account?.address?.toString() ?? null : null,
     connected,
+    transport: connected ? 'injected' : null,
     connect,
     disconnect,
   };
