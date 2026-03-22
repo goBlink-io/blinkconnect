@@ -30,6 +30,7 @@ export function useTronAdapter(): AdapterHookResult {
     chain: 'tron',
     address: connected ? address ?? null : null,
     connected,
+    transport: connected ? 'injected' : null,
     connect,
     disconnect,
   };

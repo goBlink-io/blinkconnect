@@ -5,7 +5,8 @@ import {
   useDisconnect as useAppKitDisconnect,
   useAppKit,
 } from '@reown/appkit/react';
-import type { AdapterHookResult, ChainType, ConnectOptions } from '../core/types';
+import type { AdapterHookResult, ChainType } from '../core/types';
+import { getPlatformInfo } from '../core/detector';
 
 interface EvmAdapterResult {
   evm: AdapterHookResult;
@@ -47,11 +48,20 @@ export function useEvmAdapter(): EvmAdapterResult {
     if (wagmiConnected) wagmiDisconnect();
   }, [appKitConnected, appKitDisconnect, wagmiConnected, wagmiDisconnect]);
 
+  // AppKit handles WC internally on mobile — detect the transport used
+  const platformInfo = getPlatformInfo();
+  const getEvmTransport = (chain: ChainType, isConnected: boolean) => {
+    if (!isConnected) return null;
+    // AppKit uses WC on mobile browsers, injected on desktop
+    return platformInfo.recommendedTransport[chain] ?? 'injected';
+  };
+
   return {
     evm: {
       chain: 'evm',
       address: evmAddress,
       connected: !!evmAddress,
+      transport: getEvmTransport('evm', !!evmAddress),
       connect,
       disconnect,
     },
@@ -59,6 +69,7 @@ export function useEvmAdapter(): EvmAdapterResult {
       chain: 'solana',
       address: solanaAddress,
       connected: !!solanaAddress,
+      transport: getEvmTransport('solana', !!solanaAddress),
       connect,
       disconnect,
     },
@@ -66,6 +77,7 @@ export function useEvmAdapter(): EvmAdapterResult {
       chain: 'bitcoin',
       address: bitcoinAddress,
       connected: !!bitcoinAddress,
+      transport: getEvmTransport('bitcoin', !!bitcoinAddress),
       connect,
       disconnect,
     },
