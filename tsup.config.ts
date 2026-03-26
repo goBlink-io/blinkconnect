@@ -13,6 +13,15 @@ export default defineConfig({
     'adapters/starknet': 'src/adapters/starknet.ts',
     'adapters/ton': 'src/adapters/ton.ts',
     'adapters/tron': 'src/adapters/tron.ts',
+    // Chain providers — lazy-loaded by BlinkConnectProvider
+    'react/chain-providers/SuiProvider': 'src/react/chain-providers/SuiProvider.tsx',
+    'react/chain-providers/AptosProvider': 'src/react/chain-providers/AptosProvider.tsx',
+    'react/chain-providers/StarknetProvider': 'src/react/chain-providers/StarknetProvider.tsx',
+    'react/chain-providers/TonProvider': 'src/react/chain-providers/TonProvider.tsx',
+    'react/chain-providers/TronProvider': 'src/react/chain-providers/TronProvider.tsx',
+    // Chain views — lazy-loaded by ConnectModal
+    'react/chain-views/SuiConnectView': 'src/react/chain-views/SuiConnectView.tsx',
+    'react/chain-views/StarknetConnectView': 'src/react/chain-views/StarknetConnectView.tsx',
   },
   format: ['esm', 'cjs'],
   dts: true,
@@ -32,6 +41,7 @@ export default defineConfig({
     'viem',
     '@tanstack/react-query',
     '@mysten/dapp-kit',
+    '@mysten/sui/client',
     '@hot-labs/near-connect',
     '@aptos-labs/wallet-adapter-react',
     '@starknet-react/core',

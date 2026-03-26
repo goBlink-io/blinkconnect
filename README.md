@@ -1,316 +1,146 @@
 # @goblink/connect
 
-**Universal Multi-Chain Wallet Connection SDK**
+Universal multi-chain wallet SDK for React. 9 chains, one API.
 
-One provider. One hook. 9 blockchain ecosystems. 350+ wallets.
+## Install
 
----
+```bash
+# Core (EVM + Solana + Bitcoin)
+pnpm add @goblink/connect wagmi viem @reown/appkit @reown/appkit-adapter-wagmi @reown/appkit-adapter-solana @tanstack/react-query
 
-## The Problem
-
-Connecting wallets across multiple chains requires stitching together 7+ separate SDKs, each with different APIs, state shapes, React providers, and connection flows. The result is a 7-layer provider pyramid and ~500 lines of glue code.
-
-## The Solution
-
-```tsx
-// Before: 7 nested providers
-<WagmiProvider>
-  <QueryClientProvider>
-    <SuiClientProvider>
-      <SuiWalletProvider>
-        <AptosWalletAdapterProvider>
-          <StarknetConfig>
-            <TonConnectUIProvider>
-              <TronWalletProvider>
-                <App />
-              </TronWalletProvider>
-            </TonConnectUIProvider>
-          </StarknetConfig>
-        </AptosWalletAdapterProvider>
-      </SuiWalletProvider>
-    </SuiClientProvider>
-  </QueryClientProvider>
-</WagmiProvider>
-
-// After: one provider
-<BlinkConnectProvider config={{ projectId: 'xxx' }}>
-  <App />
-</BlinkConnectProvider>
+# Add chains you need:
+pnpm add @mysten/dapp-kit          # Sui
+pnpm add @hot-labs/near-connect    # NEAR
+pnpm add @aptos-labs/wallet-adapter-react  # Aptos
+pnpm add @starknet-react/core @starknet-react/chains starknet@^8  # Starknet
+pnpm add @tonconnect/ui-react      # TON
+pnpm add @tronweb3/tronwallet-adapters @tronweb3/tronwallet-adapter-react-hooks  # Tron
 ```
 
 ## Quick Start
 
-### 1. Install
-
-```bash
-npm install @goblink/connect
-
-# Required peer deps
-npm install react react-dom @reown/appkit @reown/appkit-adapter-wagmi @reown/appkit-adapter-solana wagmi viem @tanstack/react-query
-
-# Optional — install only the chains you need
-npm install @mysten/dapp-kit           # Sui
-npm install @aptos-labs/wallet-adapter-react  # Aptos
-npm install @starknet-react/core @starknet-react/chains  # Starknet
-npm install @tonconnect/ui-react       # TON
-npm install @tronweb3/tronwallet-adapter-react-hooks @tronweb3/tronwallet-adapters  # TRON
-npm install @hot-labs/near-connect     # NEAR
-```
-
-### 2. Wrap Your App
-
 ```tsx
-import { BlinkConnectProvider } from '@goblink/connect/react';
+import { BlinkConnectProvider, ConnectButton, useWallet } from '@goblink/connect/react';
 
 function App() {
   return (
-    <BlinkConnectProvider config={{ projectId: 'your-walletconnect-id' }}>
-      <YourApp />
+    <BlinkConnectProvider config={{
+      projectId: 'YOUR_WALLETCONNECT_PROJECT_ID',
+      chains: ['evm', 'solana', 'sui'],  // Only loads what you need
+      appName: 'My App',
+    }}>
+      <ConnectButton />
+      <MyComponent />
     </BlinkConnectProvider>
   );
 }
-```
 
-### 3. Use the Hook
-
-```tsx
-import { useWallet, ConnectButton, ConnectModal } from '@goblink/connect/react';
-
-function Navbar() {
-  const { wallets, address, isConnected, connect, disconnect } = useWallet();
-
+function MyComponent() {
+  const { wallets, address, connect, disconnect, getAddress, isChainConnected } = useWallet();
+  
   return (
-    <nav>
-      <ConnectButton />
-      <ConnectModal />
-    </nav>
+    <div>
+      {address ? (
+        <>
+          <p>Connected: {address}</p>
+          <button onClick={() => disconnect()}>Disconnect</button>
+        </>
+      ) : (
+        <button onClick={() => connect()}>Connect Wallet</button>
+      )}
+    </div>
   );
 }
-```
-
-## API Reference
-
-### Hooks
-
-#### `useWallet()`
-
-Primary hook for wallet interaction.
-
-```tsx
-const {
-  wallets,          // ConnectedWallet[] — all connected wallets
-  address,          // string | null — primary wallet address
-  chain,            // ChainType | null — primary wallet chain
-  isConnected,      // boolean — whether any wallet is connected
-  connectedCount,   // number — count of connected wallets
-  connect,          // (chain?: ChainType) => Promise<void>
-  disconnect,       // (chain?: ChainType) => Promise<void>
-  getAddress,       // (chain: ChainType) => string | null
-  isChainConnected, // (chain: ChainType) => boolean
-  switchChain,      // (chain: ChainType) => Promise<void>
-} = useWallet();
-```
-
-#### `useConnect()`
-
-Connection management (modal, connect, disconnect).
-
-```tsx
-const {
-  openModal,        // () => void
-  closeModal,       // () => void
-  isModalOpen,      // boolean
-  connectChain,     // (chain: ChainType) => Promise<void>
-  disconnectChain,  // (chain: ChainType) => Promise<void>
-  disconnectAll,    // () => Promise<void>
-} = useConnect();
-```
-
-#### `useBalance(chain?, refreshInterval?)`
-
-Balance hook with auto-refresh.
-
-```tsx
-const {
-  balance,    // string | null
-  symbol,     // string | null
-  isLoading,  // boolean
-  error,      // Error | null
-  refetch,    // () => void
-} = useBalance('evm', 30000);
-```
-
-#### `useSign()`
-
-Sign messages and transactions.
-
-```tsx
-const { signMessage, signTransaction } = useSign();
-const sig = await signMessage("Hello!");
-const txHash = await signTransaction({ to: '0x...', value: '0.1' });
-```
-
-### Components
-
-#### `<ConnectButton />`
-
-Drop-in button that shows "Connect Wallet" or the connected address.
-
-```tsx
-<ConnectButton />
-<ConnectButton label="Sign In" showChainIcon={true} theme="dark" />
-```
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `label` | `string` | `"Connect Wallet"` | Button text when disconnected |
-| `showChainIcon` | `boolean` | `true` | Show chain icon when connected |
-| `theme` | `'light' \| 'dark'` | from config | Theme override |
-| `className` | `string` | — | Custom CSS class |
-| `style` | `CSSProperties` | — | Custom inline styles |
-
-#### `<ConnectModal />`
-
-Pre-built modal with chain selector grid and per-chain wallet connection.
-
-```tsx
-<ConnectModal />
-<ConnectModal chains={['evm', 'solana', 'sui']} theme="dark" accentColor="#2563eb" />
-```
-
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `chains` | `ChainType[]` | all | Limit visible chains |
-| `theme` | `'light' \| 'dark'` | from config | Theme override |
-| `accentColor` | `string` | `#3b82f6` | Accent color |
-| `logo` | `string` | — | App logo URL |
-| `className` | `string` | — | Custom CSS class |
-
-### Configuration
-
-```tsx
-<BlinkConnectProvider config={{
-  // Required
-  projectId: 'your-walletconnect-project-id',
-
-  // Optional
-  chains: ['evm', 'solana', 'sui'],     // Enable specific chains (default: all)
-  theme: 'dark',                          // 'light' | 'dark' | 'auto'
-  appName: 'My App',                      // Shown in wallet prompts
-  appIcon: 'https://myapp.com/icon.png',  // App icon URL
-  appUrl: 'https://myapp.com',            // App URL
-
-  // Chain-specific
-  evmChains: [customChain],              // Custom EVM chains
-  nearNetwork: 'mainnet',                 // 'mainnet' | 'testnet'
-  suiNetwork: 'mainnet',                  // 'mainnet' | 'testnet' | 'devnet'
-  tonManifestUrl: '/tonconnect-manifest.json',
-
-  // Features
-  features: {
-    multiConnect: true,                   // Multiple chains simultaneously
-    persistSession: true,                 // Remember connections
-    socialLogin: true,                    // Email/social via AppKit
-    analytics: false,                     // Usage analytics
-  },
-
-  // Callbacks
-  onConnect: (wallet) => console.log('Connected:', wallet),
-  onDisconnect: (chain) => console.log('Disconnected:', chain),
-  onError: (error, chain) => console.error(chain, error),
-}}>
 ```
 
 ## Supported Chains
 
-| Chain | Adapter | Wallets | Social Login |
-|---|---|---|---|
-| **EVM** (15 chains) | ReOwn AppKit | 350+ (MetaMask, Coinbase, Rainbow, etc.) | Google, Apple, Discord, X, GitHub |
-| **Solana** | ReOwn AppKit | Phantom, Solflare, Backpack, etc. | Same as EVM |
-| **Bitcoin** | ReOwn AppKit | Xverse, Leather, UniSat, etc. | Same as EVM |
-| **Sui** | @mysten/dapp-kit | Sui Wallet, Suiet, Ethos, etc. | — |
-| **NEAR** | @hot-labs/near-connect | HOT Wallet, NEAR Wallet, MyNearWallet | — |
-| **Aptos** | @aptos-labs/wallet-adapter | Petra, Martian, Pontem | — |
-| **Starknet** | @starknet-react/core | Argent X, Braavos | — |
-| **TON** | @tonconnect/ui | Tonkeeper, TON Wallet, OpenMask | — |
-| **TRON** | @tronweb3/tronwallet-adapter | TronLink | — |
+| Chain | Package | Transport |
+|-------|---------|-----------|
+| EVM (Ethereum, Base, Arbitrum, +10) | Core | Injected / WalletConnect |
+| Solana | Core | Injected / WalletConnect |
+| Bitcoin | Core | WalletConnect |
+| Sui | @mysten/dapp-kit | Injected |
+| NEAR | @hot-labs/near-connect | Injected |
+| Aptos | @aptos-labs/wallet-adapter-react | Injected |
+| Starknet | @starknet-react/core | Injected |
+| TON | @tonconnect/ui-react | TonConnect |
+| Tron | @tronweb3/tronwallet-adapters | Injected |
 
-### EVM Networks
+## API Reference
 
-Ethereum, Polygon, Optimism, Arbitrum, Base, BNB Chain, Avalanche, Gnosis, Berachain, Monad, Aurora, Plasma, X Layer, ADI Chain, Sepolia (testnet).
+### `<BlinkConnectProvider>`
 
-## Comparison
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| config.projectId | string | required | WalletConnect project ID |
+| config.chains | ChainType[] | all | Which chains to enable |
+| config.theme | 'light' \| 'dark' | 'dark' | UI theme |
+| config.appName | string | - | App name for wallet prompts |
+| config.features.persistSession | boolean | true | Remember connections |
+| config.features.sessionLinking | boolean | true | Multi-wallet sessions |
 
-| Feature | BlinkConnect | RainbowKit | ConnectKit | AppKit |
-|---|---|---|---|---|
-| EVM | Yes | Yes | Yes | Yes |
-| Solana | Yes | — | — | Yes |
-| Bitcoin | Yes | — | — | Yes |
-| Sui | Yes | — | — | — |
-| NEAR | Yes | — | — | — |
-| Aptos | Yes | — | — | — |
-| Starknet | Yes | — | — | — |
-| TON | Yes | — | — | — |
-| TRON | Yes | — | — | — |
-| Multi-connect | Yes | — | — | Partial |
-| Social login | Yes | — | — | Yes |
-| Single provider | Yes | Yes | Yes | 2 providers |
+### `useWallet()`
 
-## Tree-Shaking
+| Property | Type | Description |
+|----------|------|-------------|
+| wallets | ConnectedWallet[] | All connected wallets |
+| address | string \| null | Primary wallet address |
+| isConnected | boolean | Any wallet connected |
+| connect(chain?) | function | Open connect modal |
+| disconnect(chain?) | function | Disconnect wallet(s) |
+| getAddress(chain) | function | Get address for a chain |
+| isChainConnected(chain) | function | Check chain connection |
+| platform | PlatformInfo | Device/browser detection |
+| primaryWallet | object \| null | Primary wallet details |
+| linkedWallets | array | Additional linked wallets |
+| linkWallet(chain) | function | Link another chain |
+| session | LinkedSession | Full session state |
 
-Only bundle the chains you use:
+### `<ConnectButton>`
+
+Drop-in button. Shows "Connect Wallet" or connected address with chain icon.
+
+| Prop | Type | Default |
+|------|------|---------|
+| label | string | 'Connect Wallet' |
+| theme | 'light' \| 'dark' | inherited |
+| showChainIcon | boolean | true |
+
+## Mobile Support
+
+The SDK auto-detects the platform and uses the right transport:
+- **Desktop browser**: Injected providers (extensions)
+- **Mobile wallet browser** (MetaMask app, Phantom app): Injected for native chain, WalletConnect for others
+- **Mobile regular browser** (Safari, Chrome): WalletConnect deep links to wallet apps
+
+## Session Linking (v0.2.0)
+
+Connect wallets across multiple chains in a single session:
 
 ```tsx
-// Full — all 9 ecosystems
-import { BlinkConnectProvider, ConnectModal, ConnectButton, useWallet } from '@goblink/connect/react';
+const { primaryWallet, linkedWallets, linkWallet, unlinkWallet } = useWallet();
 
-// Individual adapters for custom setups
-import { useEvmAdapter } from '@goblink/connect/adapters/evm';
-import { useSuiAdapter } from '@goblink/connect/adapters/sui';
-
-// Limit chains in config to skip unused provider layers
-<BlinkConnectProvider config={{ projectId: 'xxx', chains: ['evm', 'solana'] }}>
+// Primary: first wallet connected (e.g., EVM)
+// Linked: additional wallets (e.g., Solana, Sui)
+await linkWallet('solana');  // Opens modal for Solana
 ```
 
-Peer dependencies you don't install are automatically skipped.
+Sessions persist across page reloads via localStorage.
 
-## Vanilla JS (Non-React)
+## Lazy Loading (v0.2.0)
 
-```ts
-import { BlinkConnect } from '@goblink/connect/vanilla';
+Chain providers are lazy-loaded based on your `config.chains` array. Only the SDKs you actually use get bundled:
 
-const client = new BlinkConnect({ projectId: 'xxx' });
-
-client.on('connect', (wallet) => {
-  console.log('Connected:', wallet.chain, wallet.address);
-});
-
-client.on('disconnect', (chain) => {
-  console.log('Disconnected:', chain);
-});
+```tsx
+// Only loads @mysten/dapp-kit and @tonconnect/ui-react
+<BlinkConnectProvider config={{
+  projectId: 'xxx',
+  chains: ['evm', 'solana', 'sui', 'ton'],
+}}>
 ```
 
-## Utilities
-
-```ts
-import { formatAddress, validateAddress, getChainMeta, getExplorerTxUrl } from '@goblink/connect';
-
-formatAddress('0x1234...abcd');           // '0x1234…abcd'
-validateAddress('evm', '0x...');          // true/false
-getChainMeta('solana');                   // { name: 'Solana', symbol: 'SOL', ... }
-getExplorerTxUrl('evm', '0x...');         // 'https://etherscan.io/tx/0x...'
-```
-
-## Types
-
-```ts
-type ChainType = 'evm' | 'solana' | 'sui' | 'near' | 'bitcoin' | 'aptos' | 'starknet' | 'ton' | 'tron';
-
-interface ConnectedWallet {
-  chain: ChainType;
-  address: string;
-}
-```
+If a chain SDK isn't installed, the chain is silently skipped — no crash.
 
 ## License
 

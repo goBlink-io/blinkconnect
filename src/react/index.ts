@@ -19,6 +19,8 @@ export type { ConnectModalProps } from './ConnectModal';
 export { ConnectButton } from './ConnectButton';
 export type { ConnectButtonProps } from './ConnectButton';
 
+export { ChainErrorBoundary } from './ChainErrorBoundary';
+
 // Re-export v0.2.0 types from core for convenience
 export type { PlatformInfo, Platform, Transport } from '../core/detector';
 export type { LinkedSession, WalletEntry } from '../core/session';

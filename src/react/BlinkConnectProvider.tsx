@@ -6,7 +6,8 @@ import React, {
   useState,
   useCallback,
   useMemo,
-  ReactNode,
+  useRef,
+  type ReactNode,
 } from 'react';
 import type {
   BlinkConnectConfig,
@@ -15,8 +16,9 @@ import type {
   AdapterHookResult,
   ConnectOptions,
 } from '../core/types';
+import { ChainErrorBoundary } from './ChainErrorBoundary';
 
-// ── Wallet SDK Imports ──
+// ── Core SDK Imports (always required) ──
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createAppKit } from '@reown/appkit/react';
@@ -25,23 +27,21 @@ import { SolanaAdapter } from '@reown/appkit-adapter-solana';
 import { mainnet, polygon, optimism, arbitrum, base, sepolia, bsc, gnosis, avalanche } from 'wagmi/chains';
 import { solana, solanaTestnet, solanaDevnet } from '@reown/appkit/networks';
 
-// Optional chain providers — wrapped in try/catch at the component level
-import { SuiClientProvider, WalletProvider as SuiWalletProvider } from '@mysten/dapp-kit';
-import { AptosWalletAdapterProvider } from '@aptos-labs/wallet-adapter-react';
-import { StarknetConfig, publicProvider, InjectedConnector } from '@starknet-react/core';
-import { mainnet as starknetMainnet } from '@starknet-react/chains';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
-import { WalletProvider as TronWalletProvider } from '@tronweb3/tronwallet-adapter-react-hooks';
-import { TronLinkAdapter } from '@tronweb3/tronwallet-adapters';
-
-// Adapters
+// Core adapters (EVM/Solana/Bitcoin + NEAR — no provider wrapper needed)
 import { useEvmAdapter } from '../adapters/evm';
-import { useSuiAdapter } from '../adapters/sui';
 import { useNearAdapter } from '../adapters/near';
-import { useAptosAdapter } from '../adapters/aptos';
-import { useStarknetAdapter } from '../adapters/starknet';
-import { useTonAdapter } from '../adapters/ton';
-import { useTronAdapter } from '../adapters/tron';
+import { createNoopAdapter } from '../adapters/base';
+
+// ── Lazy Chain Providers ──
+// Only loaded when the chain is in config.chains
+
+const CHAIN_PROVIDER_LOADERS: Partial<Record<ChainType, () => Promise<{ default: React.ComponentType<any> }>>> = {
+  sui: () => import('./chain-providers/SuiProvider'),
+  aptos: () => import('./chain-providers/AptosProvider'),
+  starknet: () => import('./chain-providers/StarknetProvider'),
+  ton: () => import('./chain-providers/TonProvider'),
+  tron: () => import('./chain-providers/TronProvider'),
+};
 
 // ── Context Types ──
 
@@ -138,86 +138,63 @@ function initAppKit(config: BlinkConnectConfig) {
   return wagmiAdapter;
 }
 
-// ── Provider Stack (internal) ──
+// ── Provider Stack ──
 
 const queryClient = new QueryClient();
 
-const suiNetworks = {
-  mainnet: { url: 'https://fullnode.mainnet.sui.io:443', network: 'mainnet' as const },
-  testnet: { url: 'https://fullnode.testnet.sui.io:443', network: 'testnet' as const },
-  devnet: { url: 'https://fullnode.devnet.sui.io:443', network: 'devnet' as const },
-};
-
-const starknetConnectors = [
-  new InjectedConnector({ options: { id: 'argentX' } }),
-  new InjectedConnector({ options: { id: 'braavos' } }),
-];
-
-const tronAdapters = [new TronLinkAdapter()];
-
-interface ProviderStackProps {
+interface ChainProvidersProps {
   config: BlinkConnectConfig;
-  wagmiAdapter: WagmiAdapter;
+  onAdapter: (chain: ChainType, adapter: AdapterHookResult) => void;
   children: ReactNode;
 }
 
-function ProviderStack({ config, wagmiAdapter, children }: ProviderStackProps) {
-  const suiNetwork = config.suiNetwork || 'mainnet';
-  const tonManifestUrl =
-    config.tonManifestUrl ||
-    (typeof window !== 'undefined'
-      ? `${window.location.origin}/tonconnect-manifest.json`
-      : 'https://goblink.io/tonconnect-manifest.json');
-
+/**
+ * Dynamically wraps children in chain-specific providers based on config.chains.
+ * Uses React.lazy() so chain SDKs are only imported when needed.
+ * Each provider is wrapped in an error boundary so a missing/broken SDK
+ * doesn't crash the entire app — that chain just won't be available.
+ */
+function ChainProviders({ config, onAdapter, children }: ChainProvidersProps) {
   const enabledChains = config.chains;
   const isEnabled = (chain: ChainType) => !enabledChains || enabledChains.includes(chain);
 
-  const persistSession = config.features?.persistSession ?? false;
+  // Memoize lazy components so they're stable across renders
+  const LazyProviders = useMemo(() => {
+    const providers: Array<{
+      chain: ChainType;
+      Component: React.LazyExoticComponent<React.ComponentType<any>>;
+    }> = [];
 
-  // Build the provider tree — only include enabled chains
-  let tree = <>{children}</>;
+    for (const [chain, loader] of Object.entries(CHAIN_PROVIDER_LOADERS)) {
+      if (isEnabled(chain as ChainType)) {
+        providers.push({
+          chain: chain as ChainType,
+          Component: lazy(loader!),
+        });
+      }
+    }
 
-  if (isEnabled('tron')) {
-    tree = (
-      <TronWalletProvider adapters={tronAdapters} autoConnect={persistSession}>
-        {tree}
-      </TronWalletProvider>
+    return providers;
+  }, [enabledChains?.join(',')]);
+
+  // Nest providers: [A, B, C] → <A><B><C>{children}</C></B></A>
+  let wrapped: ReactNode = children;
+
+  for (let i = LazyProviders.length - 1; i >= 0; i--) {
+    const { chain, Component } = LazyProviders[i];
+    const inner = wrapped;
+    wrapped = (
+      <ChainErrorBoundary chain={chain} onError={config.onError ? (err) => config.onError!(err, chain) : undefined}>
+        <Suspense fallback={inner}>
+          <Component config={config} onAdapter={onAdapter}>
+            {inner}
+          </Component>
+        </Suspense>
+      </ChainErrorBoundary>
     );
   }
 
-  if (isEnabled('ton')) {
-    tree = <TonConnectUIProvider manifestUrl={tonManifestUrl}>{tree}</TonConnectUIProvider>;
-  }
-
-  if (isEnabled('starknet')) {
-    tree = (
-      <StarknetConfig
-        chains={[starknetMainnet]}
-        provider={publicProvider()}
-        connectors={starknetConnectors as any}
-      >
-        {tree}
-      </StarknetConfig>
-    );
-  }
-
-  if (isEnabled('aptos')) {
-    tree = <AptosWalletAdapterProvider autoConnect={persistSession}>{tree}</AptosWalletAdapterProvider>;
-  }
-
-  if (isEnabled('sui')) {
-    tree = (
-      <SuiClientProvider networks={suiNetworks} defaultNetwork={suiNetwork}>
-        <SuiWalletProvider autoConnect={persistSession}>{tree}</SuiWalletProvider>
-      </SuiClientProvider>
-    );
-  }
-
-  return (
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
-      <QueryClientProvider client={queryClient}>{tree}</QueryClientProvider>
-    </WagmiProvider>
-  );
+  return <>{wrapped}</>;
 }
 
 // ── Unified State Layer ──
@@ -227,28 +204,38 @@ function UnifiedWalletLayer({ config, children }: { config: BlinkConnectConfig; 
   const enabledChains = config.chains;
   const isEnabled = (chain: ChainType) => !enabledChains || enabledChains.includes(chain);
 
-  // Connect all adapters
-  const evmResult = useEvmAdapter();
-  const suiResult = useSuiAdapter();
-  const nearResult = useNearAdapter({ networkId: config.nearNetwork });
-  const aptosResult = useAptosAdapter();
-  const starknetResult = useStarknetAdapter();
-  const tonResult = useTonAdapter();
-  const tronResult = useTronAdapter();
+  // Adapter state from lazy chain providers — collected via callbacks
+  const [chainAdapters, setChainAdapters] = useState<Partial<Record<ChainType, AdapterHookResult>>>({});
 
+  const handleAdapterUpdate = useCallback((chain: ChainType, adapter: AdapterHookResult) => {
+    setChainAdapters((prev) => {
+      // Only update if something actually changed to avoid render loops
+      const existing = prev[chain];
+      if (existing && existing.address === adapter.address && existing.connected === adapter.connected) {
+        return prev;
+      }
+      return { ...prev, [chain]: adapter };
+    });
+  }, []);
+
+  // Core adapters (always loaded — EVM/Solana/Bitcoin share AppKit, NEAR is lightweight)
+  const evmResult = useEvmAdapter();
+  const nearResult = isEnabled('near') ? useNearAdapter({ networkId: config.nearNetwork }) : createNoopAdapter('near');
+
+  // Build unified adapters map: core + lazy-loaded chain adapters
   const adapters: Record<ChainType, AdapterHookResult> = useMemo(
     () => ({
       evm: evmResult.evm,
       solana: evmResult.solana,
       bitcoin: evmResult.bitcoin,
-      sui: suiResult,
+      sui: chainAdapters.sui || createNoopAdapter('sui'),
       near: nearResult,
-      aptos: aptosResult,
-      starknet: starknetResult,
-      ton: tonResult,
-      tron: tronResult,
+      aptos: chainAdapters.aptos || createNoopAdapter('aptos'),
+      starknet: chainAdapters.starknet || createNoopAdapter('starknet'),
+      ton: chainAdapters.ton || createNoopAdapter('ton'),
+      tron: chainAdapters.tron || createNoopAdapter('tron'),
     }),
-    [evmResult, suiResult, nearResult, aptosResult, starknetResult, tonResult, tronResult]
+    [evmResult, nearResult, chainAdapters]
   );
 
   // Build connected wallets list
@@ -288,12 +275,13 @@ function UnifiedWalletLayer({ config, children }: { config: BlinkConnectConfig; 
       if (chain && adapters[chain]) {
         await adapters[chain].disconnect();
       } else {
-        // Disconnect all
         for (const adapter of Object.values(adapters)) {
           if (adapter.connected) {
             try {
               await adapter.disconnect();
-            } catch {}
+            } catch {
+              // Silent — best effort disconnect
+            }
           }
         }
       }
@@ -306,7 +294,9 @@ function UnifiedWalletLayer({ config, children }: { config: BlinkConnectConfig; 
       if (adapter.connected) {
         try {
           await adapter.disconnect();
-        } catch {}
+        } catch {
+          // Silent — best effort disconnect
+        }
       }
     }
   }, [adapters]);
@@ -336,7 +326,9 @@ function UnifiedWalletLayer({ config, children }: { config: BlinkConnectConfig; 
 
   return (
     <BlinkWalletContext.Provider value={value}>
-      {children}
+      <ChainProviders config={config} onAdapter={handleAdapterUpdate}>
+        {children}
+      </ChainProviders>
       {isModalOpen && <ConnectModalPortal />}
     </BlinkWalletContext.Provider>
   );
@@ -372,15 +364,16 @@ export function BlinkConnectProvider({ config, children }: BlinkConnectProviderP
   }
 
   if (!cachedWagmiAdapter) {
-    // Fallback — create wagmi adapter without AppKit
     const evmChains = [mainnet, polygon, optimism, arbitrum, base, bsc, avalanche, gnosis, sepolia] as any[];
     cachedWagmiAdapter = new WagmiAdapter({ networks: evmChains, projectId: config.projectId });
   }
 
   return (
-    <ProviderStack config={config} wagmiAdapter={cachedWagmiAdapter}>
-      <UnifiedWalletLayer config={config}>{children}</UnifiedWalletLayer>
-    </ProviderStack>
+    <WagmiProvider config={cachedWagmiAdapter.wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <UnifiedWalletLayer config={config}>{children}</UnifiedWalletLayer>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }
 

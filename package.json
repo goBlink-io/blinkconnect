@@ -71,6 +71,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
@@ -82,7 +83,7 @@
     "@reown/appkit-adapter-solana": ">=1.0.0",
     "@reown/appkit-adapter-wagmi": ">=1.0.0",
     "@starknet-react/chains": ">=0.1.0",
-    "@starknet-react/core": ">=2.0.0",
+    "@starknet-react/core": ">=2.0.0 <6.0.0",
     "@tanstack/react-query": ">=5.0.0",
     "@tonconnect/ui-react": ">=2.0.0",
     "@tronweb3/tronwallet-adapter-react-hooks": ">=1.0.0",
@@ -137,6 +138,7 @@
     "react-dom": "^18.3.1",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
+    "vitest": "^3.1.0",
     "viem": "^2.46.3",
     "wagmi": "^3.5.0"
   },

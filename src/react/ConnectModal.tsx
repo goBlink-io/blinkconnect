@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { useBlinkWalletContext } from './BlinkConnectProvider';
 import type { ChainType } from '../core/types';
 import { formatAddress } from '../utils/address';
@@ -8,14 +8,39 @@ import type { PlatformInfo } from '../core/detector';
 import { SUPPORTED_MOBILE_WALLETS, getWalletsForChain } from '../utils/deeplinks';
 import type { MobileWalletInfo } from '../utils/deeplinks';
 
-// Sui wallet connection
-import {
-  useWallets as useSuiWallets,
-  useConnectWallet as useSuiConnectWallet,
-} from '@mysten/dapp-kit';
+// ── Lazy chain-specific views ──
+// These are only loaded when the user selects that chain in the modal.
+// If the SDK isn't installed, the import fails and the error boundary catches it.
 
-// Starknet connectors for the modal
-import { useConnect as useStarknetConnect } from '@starknet-react/core';
+const LazySuiConnectView = lazy(() =>
+  import('./chain-views/SuiConnectView').catch(() => ({
+    default: ({ colors }: any) => (
+      <ChainUnavailableMessage chain="Sui" pkg="@mysten/dapp-kit" colors={colors} />
+    ),
+  }))
+);
+
+const LazyStarknetConnectView = lazy(() =>
+  import('./chain-views/StarknetConnectView').catch(() => ({
+    default: ({ colors }: any) => (
+      <ChainUnavailableMessage chain="Starknet" pkg="@starknet-react/core" colors={colors} />
+    ),
+  }))
+);
+
+/** Fallback message when a chain's SDK is not installed */
+function ChainUnavailableMessage({ chain, pkg, colors }: { chain: string; pkg: string; colors: any }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+      <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '8px' }}>
+        {chain} wallet connection is not available.
+      </p>
+      <p style={{ fontSize: '13px', color: colors.textMuted }}>
+        Install <code style={{ backgroundColor: colors.bgSecondary || colors.hoverBg, padding: '2px 6px', borderRadius: '4px', fontSize: '12px' }}>{pkg}</code> to enable {chain} support.
+      </p>
+    </div>
+  );
+}
 
 export interface ConnectModalProps {
   /** Limit which chains are shown */
@@ -404,7 +429,7 @@ function DesktopChainList({ visibleChains, colors, isDark, ctx, onSelectChain }:
   );
 }
 
-// ── Mobile Browser View (NEW) ──
+// ── Mobile Browser View ──
 
 interface MobileBrowserViewProps {
   visibleChains: ChainOption[];
@@ -617,22 +642,11 @@ function MobileBrowserView({ visibleChains, colors, ctx, platformInfo, onSelectC
             ))}
         </div>
       </div>
-
-      {/* Future: zkLogin placeholder */}
-      {/* 
-      <div style={{ borderTop: `1px solid ${colors.border}`, paddingTop: '16px' }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-          Or sign in with
-        </div>
-        <button>Sign in with Google (Sui)</button>
-        <button>Sign in with Apple (Sui)</button>
-      </div>
-      */}
     </div>
   );
 }
 
-// ── Wallet Browser View (NEW) ──
+// ── Wallet Browser View ──
 
 interface WalletBrowserViewProps {
   visibleChains: ChainOption[];
@@ -875,11 +889,19 @@ function renderChainConnect(
   ctx: ReturnType<typeof useBlinkWalletContext>,
 ) {
   if (selectedChain === 'sui') {
-    return <SuiConnectView colors={colors} onClose={ctx.closeModal} />;
+    return (
+      <Suspense fallback={<LoadingSpinner colors={colors} />}>
+        <LazySuiConnectView colors={colors} onClose={ctx.closeModal} />
+      </Suspense>
+    );
   }
 
   if (selectedChain === 'starknet') {
-    return <StarknetConnectView colors={colors} onClose={ctx.closeModal} />;
+    return (
+      <Suspense fallback={<LoadingSpinner colors={colors} />}>
+        <LazyStarknetConnectView colors={colors} onClose={ctx.closeModal} />
+      </Suspense>
+    );
   }
 
   const chain = ALL_CHAINS.find((c) => c.id === selectedChain)!;
@@ -914,172 +936,11 @@ function renderChainConnect(
   );
 }
 
-// ── Sui Connect Sub-view ──
-
-function SuiConnectView({ colors, onClose }: { colors: Colors; onClose: () => void }) {
-  const wallets = useSuiWallets();
-  const { mutate: connectWallet, isPending } = useSuiConnectWallet();
-  const [error, setError] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState<string | null>(null);
-
-  const platformInfo = useMemo(() => getPlatformInfo(), []);
-
-  const handleConnect = (wallet: ReturnType<typeof useSuiWallets>[number]) => {
-    setError(null);
-    setConnecting(wallet.name);
-    console.log('[BlinkConnect] Connecting Sui wallet:', wallet.name, wallet);
-    connectWallet(
-      { wallet },
-      {
-        onSuccess: () => {
-          console.log('[BlinkConnect] Sui wallet connected:', wallet.name);
-          setTimeout(onClose, 400);
-        },
-        onError: (err: Error) => {
-          console.error('[BlinkConnect] Sui wallet connect error:', err);
-          setError(err?.message || 'Connection failed');
-          setConnecting(null);
-        },
-      }
-    );
-  };
-
-  const noWallets = wallets.length === 0;
-  const isMobile = platformInfo.isMobile;
-
+/** Simple loading indicator for lazy-loaded chain views */
+function LoadingSpinner({ colors }: { colors: Colors }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '8px' }}>
-        {isMobile && noWallets
-          ? 'Open a Sui wallet app or install one to connect'
-          : 'Select a Sui wallet'}
-      </p>
-      {error && (
-        <p style={{ fontSize: '13px', color: '#ef4444', padding: '8px 12px', backgroundColor: 'rgba(239,68,68,0.1)', borderRadius: '8px' }}>
-          {error}
-        </p>
-      )}
-      {noWallets && !isMobile && (
-        <p style={{ fontSize: '13px', color: colors.textMuted, textAlign: 'center', padding: '20px 0' }}>
-          No Sui wallets detected. Install a Sui wallet extension.
-        </p>
-      )}
-      {noWallets && isMobile && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {getWalletsForChain('sui').map((wallet) => (
-            <a
-              key={wallet.id}
-              href={wallet.appStore || wallet.playStore || '#'}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                padding: '12px 16px',
-                borderRadius: '10px',
-                border: `1px solid ${colors.border}`,
-                backgroundColor: 'transparent',
-                color: colors.text,
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: 500,
-              }}
-            >
-              <span style={{ fontSize: '20px' }}>{wallet.icon}</span>
-              <div>
-                <div>{wallet.name}</div>
-                <div style={{ fontSize: '12px', color: colors.textSecondary }}>Install app</div>
-              </div>
-            </a>
-          ))}
-        </div>
-      )}
-      {wallets.map((wallet) => (
-        <button
-          key={wallet.name}
-          onClick={() => handleConnect(wallet)}
-          disabled={isPending}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            padding: '12px 16px',
-            borderRadius: '10px',
-            border: `1px solid ${colors.border}`,
-            backgroundColor: connecting === wallet.name ? (colors.accent || '#3b82f6') + '22' : 'transparent',
-            color: colors.text,
-            cursor: isPending ? 'wait' : 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
-            fontFamily: 'inherit',
-            transition: 'background-color 0.15s',
-            width: '100%',
-            opacity: isPending && connecting !== wallet.name ? 0.5 : 1,
-          }}
-        >
-          {wallet.icon && (
-            <img
-              src={wallet.icon}
-              alt={wallet.name}
-              style={{ width: '28px', height: '28px', borderRadius: '6px' }}
-            />
-          )}
-          <span>{connecting === wallet.name && isPending ? `Connecting ${wallet.name}...` : wallet.name}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Starknet Connect Sub-view ──
-
-function StarknetConnectView({ colors, onClose }: { colors: Colors; onClose: () => void }) {
-  const { connect, connectors } = useStarknetConnect();
-
-  const walletNames = ['Argent X', 'Braavos'];
-  const walletEmojis = ['\uD83E\uDD8A', '\uD83D\uDEE1\uFE0F'];
-
-  return (
-    <div>
-      <p style={{ fontSize: '14px', color: colors.textSecondary, marginBottom: '12px' }}>
-        Connect your Starknet wallet
-      </p>
-      {connectors.map((connector, i: number) => (
-        <button
-          key={i}
-          onClick={() => {
-            connect({ connector });
-            onClose();
-          }}
-          style={{
-            width: '100%',
-            padding: '12px 16px',
-            borderRadius: '12px',
-            border: `2px solid ${colors.border}`,
-            backgroundColor: 'transparent',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '8px',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = colors.hoverBg;
-            e.currentTarget.style.borderColor = colors.accent;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.borderColor = colors.border;
-          }}
-        >
-          <span style={{ fontSize: '20px' }}>{walletEmojis[i] || '\uD83D\uDCB3'}</span>
-          <span style={{ fontWeight: 600, color: colors.text }}>
-            {walletNames[i] || `Wallet ${i + 1}`}
-          </span>
-        </button>
-      ))}
+    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+      <p style={{ fontSize: '14px', color: colors.textSecondary }}>Loading...</p>
     </div>
   );
 }

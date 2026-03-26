@@ -43,6 +43,26 @@ export function getWalletDeepLink(wallet: string, uri: string): string | null {
   return generator?.(uri) ?? null;
 }
 
+// ── SVG Wallet Icons ──
+// Simple branded SVG icons as data URIs — no emoji, works everywhere.
+
+function walletIcon(bgColor: string, letter: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(`<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="8" fill="${bgColor}"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="white" font-family="system-ui">${letter}</text></svg>`)}`;
+}
+
+function rainbowIcon(): string {
+  return `data:image/svg+xml,${encodeURIComponent('<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#FF6B6B"/><stop offset="100%" stop-color="#6B6BFF"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#rg)"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="white" font-family="system-ui">R</text></svg>')}`;
+}
+
+const WALLET_ICONS = {
+  metamask: walletIcon('#F6851B', 'M'),
+  phantom: walletIcon('#AB9FF2', 'P'),
+  trust: walletIcon('#0500FF', 'T'),
+  coinbase: walletIcon('#0052FF', 'C'),
+  sui: walletIcon('#4DA2FF', 'S'),
+  rainbow: rainbowIcon(),
+} as const;
+
 /**
  * Supported mobile wallets with their metadata.
  * Used by the mobile connect modal to render wallet options.
@@ -51,7 +71,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'metamask',
     name: 'MetaMask',
-    icon: '🦊',
+    icon: WALLET_ICONS.metamask,
     chains: ['evm'],
     deepLink: DEEP_LINK_GENERATORS.metamask!,
     appStore: 'https://apps.apple.com/app/metamask/id1438144202',
@@ -60,7 +80,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'phantom',
     name: 'Phantom',
-    icon: '👻',
+    icon: WALLET_ICONS.phantom,
     chains: ['solana', 'evm', 'bitcoin'],
     deepLink: DEEP_LINK_GENERATORS.phantom!,
     appStore: 'https://apps.apple.com/app/phantom-crypto-wallet/id1598432977',
@@ -69,7 +89,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'trust-wallet',
     name: 'Trust Wallet',
-    icon: '🛡️',
+    icon: WALLET_ICONS.trust,
     chains: ['evm', 'solana'],
     deepLink: DEEP_LINK_GENERATORS['trust-wallet']!,
     appStore: 'https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409',
@@ -78,7 +98,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'coinbase-wallet',
     name: 'Coinbase Wallet',
-    icon: '🔵',
+    icon: WALLET_ICONS.coinbase,
     chains: ['evm', 'solana'],
     deepLink: DEEP_LINK_GENERATORS['coinbase-wallet']!,
     appStore: 'https://apps.apple.com/app/coinbase-wallet/id1278383455',
@@ -87,7 +107,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'sui-wallet',
     name: 'Sui Wallet',
-    icon: '💧',
+    icon: WALLET_ICONS.sui,
     chains: ['sui'],
     deepLink: DEEP_LINK_GENERATORS['sui-wallet']!,
     appStore: 'https://apps.apple.com/app/sui-wallet-mobile/id6476572140',
@@ -96,7 +116,7 @@ export const SUPPORTED_MOBILE_WALLETS: MobileWalletInfo[] = [
   {
     id: 'rainbow',
     name: 'Rainbow',
-    icon: '🌈',
+    icon: WALLET_ICONS.rainbow,
     chains: ['evm'],
     deepLink: DEEP_LINK_GENERATORS.rainbow!,
     appStore: 'https://apps.apple.com/app/rainbow-ethereum-wallet/id1457119021',
